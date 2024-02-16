@@ -27,7 +27,7 @@ var summaries = new[]
 };
 
 // https://github.com/Polly-Contrib/Simmy
-var fault = new SocketException(errorCode: 10013);
+var fault = new SocketException(errorCode: 10051 /*WSANETUNREACH*/);
 var socketExceptionPolicy = MonkeyPolicy.InjectException(with =>
 {
     with.Fault(fault)
@@ -38,12 +38,25 @@ var socketExceptionPolicy = MonkeyPolicy.InjectException(with =>
 var responsePolicy = MonkeyPolicy.InjectLatency(with =>
 {
     with.Latency(TimeSpan.FromMinutes(2))
-        .InjectionRate(0.05)
+        .InjectionRate(0.95)
         .Enabled();
 });
 // Exception, Result, Latency, Behavior
 // Enabled(bool), EnabledWhen(condition)
 var chaosPolicy = socketExceptionPolicy.Wrap(responsePolicy);
+app.MapGet("/weatherforecast-nochaos", () =>
+    {
+        var forecast = Enumerable.Range(1, 5).Select(index =>
+                new WeatherForecast
+                (
+                    DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+                    Random.Shared.Next(-20, 55),
+                    summaries[Random.Shared.Next(summaries.Length)]
+                ))
+            .ToArray();
+        return forecast;
+    })
+    .WithName("GetWeatherForecast");
 app.MapGet("/weatherforecast", () =>
     {
         return chaosPolicy.Execute(() =>
@@ -59,7 +72,7 @@ app.MapGet("/weatherforecast", () =>
             return forecast;
         });
     })
-    .WithName("GetWeatherForecast");
+    .WithName("GetWeatherForecast2");
 
 app.Run();
 
